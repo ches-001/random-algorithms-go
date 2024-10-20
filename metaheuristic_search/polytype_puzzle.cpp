@@ -20,7 +20,7 @@ struct node_struct {
         vec_t<char> state;
         vec_t<std::string> path;
         
-        node_struct() : heuristics(0), state(), path() {}
+        node_struct() : heuristics(), state(), path() {}
 
         node_struct(
             int heuristics, 
@@ -393,7 +393,6 @@ vec_t<std::string> iterative_deepening_astar_solver(PolytypePuzzle &puzzle){
 
 vec_t<std::string> beam_search_solver(PolytypePuzzle &puzzle, int beam_width){
     puzzle.reset();
-    beam_width = std::min(beam_width, (int) puzzle.actions_map.size());
     vec_t<char> initial_state = puzzle.get_current_state();
     int initial_score = puzzle.base_heuristics_fn(initial_state);
     int score_threshold = initial_score;
