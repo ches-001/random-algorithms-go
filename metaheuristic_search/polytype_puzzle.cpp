@@ -190,7 +190,7 @@ class PolytypePuzzle{
 uo_vec_map_t<std::string, std::string> *parse_csv_file(std::ifstream &file);
 vec_t<std::string> astar_solver(PolytypePuzzle &puzzle, int max_depth);
 vec_t<std::string> iterative_deepening_astar_solver(PolytypePuzzle &puzzle);
-vec_t<std::string> beam_search_solver(PolytypePuzzle &puzzle);
+vec_t<std::string> beam_search_solver(PolytypePuzzle &puzzle, int beam_width);
 
 int main(){
     std::string puzzles_info_csv("data/puzzle_info.csv");
@@ -205,7 +205,7 @@ int main(){
     std::string puzzle_type, start, goal, allowed_moves;
     vec_t<std::string> solution;
 
-    int _icount=286, _istop=328;
+    int _icount=284, _istop=328;
     for (;_icount<_istop; _icount++){
         puzzle_type = (*puzzle_map)["puzzle_type"][_icount];
         start = (*puzzle_map)["initial_state"][_icount];
@@ -222,9 +222,9 @@ int main(){
         auto start = std::chrono::high_resolution_clock::now();
         solution = astar_solver(puzzle, -1);
         // solution = iterative_deepening_astar_solver(puzzle);
+        // solution = beam_search_solver(puzzle, 4);
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> duration = (end - start);
-
         std::cout << "puzzle id: " << _icount << "\tpuzzle_type: " << puzzle_type << std::endl;
         std::cout << "solution: ";
         for(std::string &action : solution){
@@ -340,11 +340,11 @@ vec_t<std::string> iterative_deepening_astar_solver(PolytypePuzzle &puzzle){
     int initial_score = puzzle.base_heuristics_fn(initial_state);
     int score_threshold = initial_score;
     vec_t<std::string> initial_path = {};
-    node_struct current_node(initial_score, initial_state, initial_path);
+    node_struct root_node(initial_score, initial_state, initial_path);
     node_struct max_or_target_node;
 
-    std::function<node_struct(node_struct)> node_expander = [
-        &node_expander, &puzzle, &score_threshold
+    std::function<node_struct(node_struct)> expand_node = [
+        &expand_node, &puzzle, &score_threshold
     ](const node_struct &node){
         if(node.get_score() > score_threshold || node.heuristics == 0){
             return node;
@@ -354,7 +354,8 @@ vec_t<std::string> iterative_deepening_astar_solver(PolytypePuzzle &puzzle){
         int child_heuristics;
         vec_t<char> child_state;
         vec_t<std::string> child_path = node.path;
-        vec_t<node_struct> children_nodes;
+        vec_t<node_struct> children_nodes(puzzle.actions_map.size());
+        int i = 0;
 
         std::string _actk;
         puzzle.reset(node.state);
@@ -363,13 +364,14 @@ vec_t<std::string> iterative_deepening_astar_solver(PolytypePuzzle &puzzle){
             child_state = puzzle.step(_actk);
             child_path.push_back(_actk);
             child_heuristics = puzzle.base_heuristics_fn(child_state);
-            children_nodes.emplace_back(child_heuristics, child_state, child_path);
+            children_nodes[i] = node_struct(child_heuristics, child_state, child_path);
             child_path.pop_back();
             puzzle.reset(node.state);
+            i++;
         }
 
         for(node_struct &child : children_nodes){
-            pruned_node = node_expander(child);
+            pruned_node = expand_node(child);
             if (pruned_node.heuristics == 0){
                 return pruned_node;
             }
@@ -381,7 +383,7 @@ vec_t<std::string> iterative_deepening_astar_solver(PolytypePuzzle &puzzle){
     };
     
     while(true){
-        max_or_target_node = node_expander(current_node);
+        max_or_target_node = expand_node(root_node);
         if(max_or_target_node.heuristics == 0){
             return max_or_target_node.path;
         }
@@ -389,6 +391,54 @@ vec_t<std::string> iterative_deepening_astar_solver(PolytypePuzzle &puzzle){
     }
 }
 
-vec_t<std::string> beam_search_solver(PolytypePuzzle &puzzle, int max_depth){
-    // TODO
+vec_t<std::string> beam_search_solver(PolytypePuzzle &puzzle, int beam_width){
+    puzzle.reset();
+    beam_width = std::min(beam_width, (int) puzzle.actions_map.size());
+    vec_t<char> initial_state = puzzle.get_current_state();
+    int initial_score = puzzle.base_heuristics_fn(initial_state);
+    int score_threshold = initial_score;
+    vec_t<std::string> initial_path = {};
+    node_struct root_node(initial_score, initial_state, initial_path);
+    vec_t<node_struct> children;
+    vec_t<node_struct> best_children(beam_width);
+
+    auto expand_node = [&puzzle, &children](node_struct &node){
+        std::string _actk;
+        int child_heuristics;
+        vec_t<char> child_state;
+        vec_t<std::string> child_path = node.path;
+        puzzle.reset(node.state);
+        for(auto itr=puzzle.actions_map.begin(); itr!=puzzle.actions_map.end(); ++itr){
+            _actk = itr.key();
+            child_state = puzzle.step(_actk);
+            child_heuristics = puzzle.base_heuristics_fn(child_state);
+            child_path.push_back(_actk);
+            children.emplace_back(child_heuristics, child_state, child_path);
+            child_path.pop_back();
+            puzzle.reset(node.state);
+        }
+    };
+    auto set_best_children = [
+        &best_children, &beam_width
+    ](vec_t<node_struct> &children){
+        std::sort(children.begin(), children.end(), std::less<node_struct>());
+        for(int i=0; i<beam_width; i++){
+            best_children[i] = children[i];
+        }
+    };
+    int num_iters = 0;
+    while(true){
+        if(num_iters == 0){
+            expand_node(root_node);
+        }
+        set_best_children(children);
+        children.clear();
+        for(node_struct &child : best_children){
+            if(child.heuristics == 0){
+                return child.path;
+            }
+            expand_node(child);
+        }
+        num_iters++;
+    }
 }
