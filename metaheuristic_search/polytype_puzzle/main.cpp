@@ -35,7 +35,7 @@ int main(){
     std::string puzzle_type, start, goal, allowed_moves;
     vec_t<std::string> solution;
 
-    int _icount=284, _istop=328;
+    int _icount=284, _istop=336;
     for (;_icount<_istop; _icount++){
         puzzle_type = (*puzzle_map)["puzzle_type"][_icount];
         start = (*puzzle_map)["initial_state"][_icount];

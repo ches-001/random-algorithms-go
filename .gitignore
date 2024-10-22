@@ -1,3 +1,5 @@
 .vscode
 **/*.exe
 random_ideas.txt
+to_build.txt
+**/build
