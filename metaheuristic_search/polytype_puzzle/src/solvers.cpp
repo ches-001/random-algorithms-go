@@ -70,8 +70,9 @@ void PolytypePuzzle::include_inverse_actions(json &action_map){
         _tempk = itr.key();
         action_vals = action_map[_tempk].get<vec_t<int>>();
         if (c == 0){
+            inv_action_vals.resize(action_vals.size());
             for(int i=0; i < action_vals.size(); i++){
-                inv_action_vals.push_back(i);
+                inv_action_vals[i] = i;
             }
         }
         std::sort(
